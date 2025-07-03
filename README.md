@@ -2,6 +2,7 @@
 （仅在昇腾910b上测试）
 
 pip install ultralytics
+
 pip uninstall torch torchvision
 
 pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cpu
@@ -9,6 +10,7 @@ pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https
 pytorch_npu可参考https://www.hiascend.com/document/detail/zh/Pytorch/700/configandinstg/instg/insg_0004.html
 
 wget https://gitee.com/ascend/pytorch/releases/download/v7.0.0-pytorch2.1.0/torch_npu-2.1.0.post12-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+
 pip install torch_npu-2.1.0.post12-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 
 将该目录所有文件替换到ultralytics目录下 （例：miniconda3/envs/yolo/lib/python3.10/site-packages/ultralytics）
