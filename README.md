@@ -33,6 +33,9 @@ for i in range(100):
     result = model.predict(img, save=True)
     end_time = time.time()
     print("Inference time: ", end_time - start_time)
+```
+
+
 
 ## 🏋️‍♂️ 训练（Train）
 ```python
@@ -57,3 +60,4 @@ if __name__ == '__main__':
         amp=True  # AMP 加速
         # workers=0   # 如果多进程出问题可以设为0
     )
+```
