@@ -1,7 +1,8 @@
 适配昇腾NPU的ultralytics
 （仅在昇腾910b上测试）
+python环境：Python 3.10.18
 
-pip install ultralytics
+pip install ultralytics==8.3.161
 
 pip uninstall torch torchvision
 
