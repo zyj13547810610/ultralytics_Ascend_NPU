@@ -328,26 +328,26 @@ def non_max_suppression(
             i = nms_rotated(boxes, scores, iou_thres)
         else:
             boxes = x[:, :4] + c  # boxes (offset by class)
-            # st=time.time()
-            # 使用 NPU 设备执行 NMS
-            # 注意：虽然 npu_multiclass_nms 本身很快，但其输出结果的切片操作在 NPU 上
-            # 由于 lazy 内核调度可能造成延迟，导致整体耗时偏高。因此建议在极限延迟场景下使用 CPU NMS
-            if boxes.device.type == 'npu':
-                try:
-                    # 提取类别信息  
-                    # classes = x[:, 5].long()  # 类别索引  
-                    i = _npu_multiclass_nms_adapter(x, num_classes=nc, iou_thres=iou_thres, score_thresh=conf_thres, max_det=scores.shape[0]) 
-                except (ImportError, AttributeError):  
-                    print("------NPU NMS not available, falling back to CPU NMS-------")
-                    # 回退到CPU NMS  
-                    boxes_cpu = boxes.cpu()  
-                    scores_cpu = scores.cpu()  
-                    i = torchvision.ops.nms(boxes_cpu, scores_cpu, iou_thres)  
-                    i = i.to(boxes.device)  
-            else:
-                i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
-            # et=time.time()
-            # print('npu_nms',et-st)
+            # # st=time.time()
+            # # 使用 NPU 设备执行 NMS
+            # # 注意：虽然 npu_multiclass_nms 本身很快，但其输出结果的切片操作在 NPU 上
+            # # 由于 lazy 内核调度可能造成延迟，导致整体耗时偏高。因此建议在极限延迟场景下使用 CPU NMS
+            # if boxes.device.type == 'npu':
+            #     try:
+            #         # 提取类别信息
+            #         # classes = x[:, 5].long()  # 类别索引
+            #         i = _npu_multiclass_nms_adapter(x, num_classes=nc, iou_thres=iou_thres, score_thresh=conf_thres, max_det=scores.shape[0])
+            #     except (ImportError, AttributeError):
+            #         print("------NPU NMS not available, falling back to CPU NMS-------")
+            #         # 回退到CPU NMS
+            #         boxes_cpu = boxes.cpu()
+            #         scores_cpu = scores.cpu()
+            #         i = torchvision.ops.nms(boxes_cpu, scores_cpu, iou_thres)
+            #         i = i.to(boxes.device)
+            # else:
+            #     i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+            # # et=time.time()
+            # # print('npu_nms',et-st)
             
             # st2=time.time()
             i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
