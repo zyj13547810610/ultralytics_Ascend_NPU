@@ -17,10 +17,16 @@ pip install torch_npu-2.1.0.post12-cp310-cp310-manylinux_2_17_aarch64.manylinux2
 将该目录所有文件替换到ultralytics目录下 （例：miniconda3/envs/yolo/lib/python3.10/site-packages/ultralytics）
 
 nms默认为在cpu使用torchvision.ops.nms
+
 要使用npu的nms 修改 331-355  ultralytics_Ascend_NPU/utils/ops.py  
+
 npu-nms实现函数为_npu_multiclass_nms_adapter，调用的torch_npu.contrib.function.nms.npu_multiclass_nms
+
 虽然 npu_multiclass_nms 本身很快，但其输出结果的切片操作在 NPU 上 由于 lazy 内核调度可能造成延迟，导致整体耗时偏高。因此建议在极限延迟场景下使用 CPU NMS
+
 如果有大佬有更好的方法，欢迎交流
+
+
 ## 🚀 推理（Predict）
 
 ```python
