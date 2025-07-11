@@ -320,14 +320,39 @@ def non_max_suppression(
             x, xk = x[filt], xk[filt]
 
         # Batched NMS
-        c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
+        #x:tensor([x1, y1, x2, y2, conf, cls], device='npu:0')
+        c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes  类别偏移的变量 cls*max_wh
         scores = x[:, 4]  # scores
         if rotated:
             boxes = torch.cat((x[:, :2] + c, x[:, 2:4], x[:, -1:]), dim=-1)  # xywhr
             i = nms_rotated(boxes, scores, iou_thres)
         else:
             boxes = x[:, :4] + c  # boxes (offset by class)
+            # st=time.time()
+            # 使用 NPU 设备执行 NMS
+            # 注意：虽然 npu_multiclass_nms 本身很快，但其输出结果的切片操作在 NPU 上
+            # 由于 lazy 内核调度可能造成延迟，导致整体耗时偏高。因此建议在极限延迟场景下使用 CPU NMS
+            if boxes.device.type == 'npu':
+                try:
+                    # 提取类别信息  
+                    # classes = x[:, 5].long()  # 类别索引  
+                    i = _npu_multiclass_nms_adapter(x, num_classes=nc, iou_thres=iou_thres, score_thresh=conf_thres, max_det=scores.shape[0]) 
+                except (ImportError, AttributeError):  
+                    print("------NPU NMS not available, falling back to CPU NMS-------")
+                    # 回退到CPU NMS  
+                    boxes_cpu = boxes.cpu()  
+                    scores_cpu = scores.cpu()  
+                    i = torchvision.ops.nms(boxes_cpu, scores_cpu, iou_thres)  
+                    i = i.to(boxes.device)  
+            else:
+                i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+            # et=time.time()
+            # print('npu_nms',et-st)
+            
+            # st2=time.time()
             i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+            # et2=time.time()
+            # print('cpu_nms',et2-st2)
         i = i[:max_det]  # limit detections
 
         output[xi], keepi[xi] = x[i], xk[i].reshape(-1)
@@ -338,6 +363,81 @@ def non_max_suppression(
     return (output, keepi) if return_idxs else output
 
 
+
+def _npu_multiclass_nms_adapter(x, num_classes, iou_thres=0.45, score_thresh=0.25, max_det=300):
+    """
+    x: (N, 6) [x1, y1, x2, y2, conf, cls]
+    返回保留的索引
+    时间开支太大(张量切片由于lazy 内核调度导致时间较长), 建议使用cpu nms
+    """
+    from torch_npu.contrib.function.nms import npu_multiclass_nms
+
+    boxes = x[:, :4]        # (N,4)
+    scores = x[:, 4]        # (N,)
+    labels = x[:, 5].long().clamp(0, num_classes - 1)  # (N,)
+
+    N, device = x.size(0), x.device
+
+    # 1. 构造 (N, C, 4) bbox，复制boxes到每个类别
+    multi_bboxes = boxes[:, None, :].expand(N, num_classes, 4).contiguous().float()
+
+    # 2. 构造 (N, C+1) 分数矩阵，初始为极小值
+    multi_scores = torch.full((N, num_classes + 1), -1e8, device=device)
+    multi_scores[torch.arange(N, device=device), labels] = scores
+
+    # # Step 3: 构造 (N, C) 的索引映射表
+    # idx_map = torch.arange(N, device=device)[:, None].expand(N, num_classes).contiguous()
+    
+    # Step 4: 调用NPU多类NMS，返回两个tensor
+    # keep_boxes_scores: (K, 5) [x1, y1, x2, y2, score]
+    # keep_cls: (K,) 类别索
+    keep_boxes_scores, keep_cls = npu_multiclass_nms(
+        multi_bboxes, multi_scores,
+        score_thr=score_thresh, nms_thr=iou_thres, max_num=max_det
+    )
+
+    # Step 5: 有效框筛选（去掉分数为0的填充框）  这部分在 NPU 张量切片由于lazy 内核调度导致时间较长
+    valid_mask=keep_boxes_scores[:, 4]>0
+    # valid_boxes_scores=keep_boxes_scores[valid_mask]
+    # valid_scores = keep_boxes_scores[valid_mask][:, 4].float() #f32
+    valid_scores = keep_boxes_scores[valid_mask][:, 4]  #f16
+    # valid_cls = keep_cls[valid_mask].long() #int64
+    valid_cls = keep_cls[valid_mask]  #f16
+    
+    # Step 6: 还原原始 x 中的行号（根据 cls 和 score 匹配）
+    valid_indices = labels.new_empty(valid_cls.size(0))  # (K,)
+    #way1 遍历
+    # for i in range(valid_cls.size(0)):
+    #     # 通过 cls 和 score 找原始 x 的行号
+    #     for row in range(N):
+    #         if labels[row] == valid_cls[i] and torch.isclose(scores[row], valid_scores[i], atol=5e-3):
+    #             valid_indices[i] = row
+    #             break
+    
+    # way2使用广播
+    # 原始 x 的标签和置信度
+    # labels = labels.view(1, -1)  #int64
+    labels = labels.view(1, -1).to(torch.float16)
+    # scores = scores.view(1, -1)  #f32
+    scores = scores.view(1, -1).to(torch.float16)
+
+    # 有效保留框的标签和分数
+    valid_cls_b = valid_cls.view(-1, 1) #f16
+    valid_scores_b = valid_scores.view(-1, 1) #f16
+
+    # 矢量化匹配
+    label_match = (labels == valid_cls_b)
+    score_match = torch.isclose(scores, valid_scores_b, atol=5e-3)
+    combined_match = label_match & score_match
+
+    # 获取匹配行号
+    valid_indices = combined_match.float().argmax(dim=1)
+    
+    # Step 7: 排序 + 截断
+    _, order = valid_scores.sort(descending=True)
+    keep = valid_indices[order][:max_det]
+    return keep
+    
 def clip_boxes(boxes, shape):
     """
     Clip bounding boxes to image boundaries.

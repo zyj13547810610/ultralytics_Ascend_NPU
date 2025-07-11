@@ -409,7 +409,8 @@ class BaseTrainer:
                             x["momentum"] = np.interp(ni, xi, [self.args.warmup_momentum, self.args.momentum])
 
                 # Forward
-                with autocast(self.amp):
+                # with autocast(self.amp):
+                with autocast(self.amp, device=str(self.device)):
                     batch = self.preprocess_batch(batch)
                     loss, self.loss_items = self.model(batch)
                     self.loss = loss.sum()
