@@ -14,6 +14,8 @@ wget https://gitee.com/ascend/pytorch/releases/download/v7.0.0-pytorch2.1.0/torc
 
 pip install torch_npu-2.1.0.post12-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 
+pip uninstall opencv-python numpy
+pip install opencv-python numpy==1.26.4
 将该目录所有文件替换到ultralytics目录下 （例：miniconda3/envs/yolo/lib/python3.10/site-packages/ultralytics）
 
 nms默认为在cpu使用torchvision.ops.nms
