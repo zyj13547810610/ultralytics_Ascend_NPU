@@ -31,6 +31,33 @@ npu-nms实现函数为_npu_multiclass_nms_adapter，调用的torch_npu.contrib.f
 如果有大佬有更好的方法，欢迎交流
 
 
+|||
+
+8.8更新：突然发现torch_npu内部有个扩展模块：transfer_to_npu能够自动迁移
+
+这个就更简单了，原先的代码不用动.只要在开始添加一两行代码就行
+
+```python
+# PyTorch2.4.0及之前版本，导入如下迁移代码：
+
+import torch 
+import torch_npu 
+... 
+from torch_npu.contrib import transfer_to_npu
+```
+
+```python
+#PyTorch2.5.1及之后版本，导入如下迁移代码：
+import torch 
+... 
+from torch_npu.contrib import transfer_to_npu
+```
+
+不过nms也是在cpu使用torchvision.ops.nms。这部分我依旧没有想到更好的方法。
+
+|||
+
+
 ## 🚀 推理（Predict）
 
 ```python
